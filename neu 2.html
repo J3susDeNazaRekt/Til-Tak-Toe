@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tic Tac Toe - Echtzeit</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 50px;
+    }
+    #board {
+      display: grid;
+      grid-template-columns: repeat(3, 100px);
+      grid-gap: 5px;
+      margin-bottom: 20px;
+    }
+    .cell {
+      width: 100px;
+      height: 100px;
+      font-size: 2rem;
+      cursor: pointer;
+    }
+    #status {
+      font-weight: bold;
+      margin-top: 10px;
+    }
+    #reset {
+      margin-top: 20px;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Tic Tac Toe - Echtzeit</h1>
+  <div id="board">
+    <button class="cell" data-index="0"></button>
+    <button class="cell" data-index="1"></button>
+    <button class="cell" data-index="2"></button>
+    <button class="cell" data-index="3"></button>
+    <button class="cell" data-index="4"></button>
+    <button class="cell" data-index="5"></button>
+    <button class="cell" data-index="6"></button>
+    <button class="cell" data-index="7"></button>
+    <button class="cell" data-index="8"></button>
+  </div>
+  <div id="status"></div>
+  <button id="reset">Neues Spiel</button>
+
+  <!-- Firebase -->
+  <!-- 1. Erstelle dir zuerst ein kostenloses Konto auf https://firebase.google.com/
+       2. Klicke in der Firebase-Konsole auf "Projekt erstellen".
+       3. Füge unter "Projekteinstellungen" dein Firebase-SDK-Snippet hier ein. 
+  -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <script>
+    // Füge hier deine Firebase-Konfigurationsdaten ein, zum Beispiel:
+    const firebaseConfig = {
+      apiKey: "DEIN_API_KEY",
+      authDomain: "DEINE_AUTH_DOMAIN",
+      databaseURL: "DEINE_DATABASE_URL",
+      projectId: "DEINE_PROJECT_ID",
+      storageBucket: "DEIN_STORAGE_BUCKET",
+      messagingSenderId: "DEINE_SENDER_ID",
+      appId: "DEINE_APP_ID"
+    };
+
+    // Firebase-Initialisierung
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // Referenz zum Spielzustand
+    // Du kannst "myTicTacToeGame" durch einen eigenen Namen ersetzen.
+    const gameRef = db.ref("myTicTacToeGame");
+
+    // Lokale Variablen
+    let boardState = ["", "", "", "", "", "", "", "", ""]; // 9 Felder
+    let currentPlayer = "X"; // Standard: Spieler X beginnt
+    let gameOver = false;
+
+    // DOM-Elemente
+    const cells = document.querySelectorAll(".cell");
+    const statusElem = document.getElementById("status");
+    const resetBtn = document.getElementById("reset");
+
+    // Initialer Status laden
+    gameRef.on("value", (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        boardState = data.boardState || boardState;
+        currentPlayer = data.currentPlayer || currentPlayer;
+        gameOver = data.gameOver || gameOver;
+        renderBoard();
+        updateStatusText();
+      }
+    });
+
+    // Zellen-Klick-Events
+    cells.forEach((cell) => {
+      cell.addEventListener("click", () => {
+        const index = cell.getAttribute("data-index");
+
+        // Wenn Feld noch leer, das Spiel nicht vorbei ist ...
+        if (!boardState[index] && !gameOver) {
+          boardState[index] = currentPlayer;
+          checkWin();
+          togglePlayer();
+          updateDatabase();
+        }
+      });
+    });
+
+    // Neues Spiel
+    resetBtn.addEventListener("click", () => {
+      boardState = ["", "", "", "", "", "", "", "", ""];
+      currentPlayer = "X";
+      gameOver = false;
+      updateDatabase();
+    });
+
+    // Board in den Buttons darstellen
+    function renderBoard() {
+      for (let i = 0; i < cells.length; i++) {
+        cells[i].textContent = boardState[i];
+      }
+    }
+
+    // Prüfen, ob jemand gewonnen hat
+    function checkWin() {
+      const winPatterns = [
+        [0, 1, 2],
+        [3, 4, 5],
+        [6, 7, 8],
+        [0, 3, 6],
+        [1, 4, 7],
+        [2, 5, 8],
+        [0, 4, 8],
+        [2, 4, 6],
+      ];
+
+      for (let pattern of winPatterns) {
+        const [a, b, c] = pattern;
+        if (
+          boardState[a] &&
+          boardState[a] === boardState[b] &&
+          boardState[a] === boardState[c]
+        ) {
+          gameOver = true;
+          statusElem.textContent = `Spieler ${boardState[a]} hat gewonnen!`;
+          return;
+        }
+      }
+
+      // Prüfen auf Unentschieden
+      if (!boardState.includes("")) {
+        gameOver = true;
+        statusElem.textContent = "Unentschieden!";
+      }
+    }
+
+    // Spielern wechseln
+    function togglePlayer() {
+      currentPlayer = currentPlayer === "X" ? "O" : "X";
+    }
+
+    // Status-Anzeige aktualisieren
+    function updateStatusText() {
+      if (!gameOver) {
+        statusElem.textContent = `Spieler ${currentPlayer} ist dran`;
+      }
+    }
+
+    // Daten in der Datenbank aktualisieren
+    function updateDatabase() {
+      gameRef.set({
+        boardState: boardState,
+        currentPlayer: currentPlayer,
+        gameOver: gameOver,
+      });
+    }
+  </script>
+</body>
+</html>
