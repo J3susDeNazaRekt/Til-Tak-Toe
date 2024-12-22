@@ -26,16 +26,34 @@
     #status {
       font-weight: bold;
       margin-top: 10px;
+      min-height: 1.5em;
     }
     #reset {
       margin-top: 20px;
       padding: 10px 20px;
       cursor: pointer;
     }
+    /* Einfaches Layout für die Wahl des Symbols */
+    #symbolSelection {
+      margin: 10px 0;
+    }
+    #symbolSelection button {
+      margin: 0 5px;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <h1>Tic Tac Toe - Echtzeit</h1>
+
+  <!-- Auswahl des eigenen Symbols -->
+  <div id="symbolSelection">
+    <span>Wähle dein Symbol:</span>
+    <button id="chooseX">X</button>
+    <button id="chooseO">O</button>
+  </div>
+
   <div id="board">
     <button class="cell" data-index="0"></button>
     <button class="cell" data-index="1"></button>
@@ -47,80 +65,99 @@
     <button class="cell" data-index="7"></button>
     <button class="cell" data-index="8"></button>
   </div>
+
   <div id="status"></div>
   <button id="reset">Neues Spiel</button>
 
-  <!-- Firebase -->
-  <!-- 1. Erstelle dir zuerst ein kostenloses Konto auf https://firebase.google.com/
-       2. Klicke in der Firebase-Konsole auf "Projekt erstellen".
-       3. Füge unter "Projekteinstellungen" dein Firebase-SDK-Snippet hier ein. 
-  -->
+  <!-- Firebase (CDN) -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
   <script>
-    // Füge hier deine Firebase-Konfigurationsdaten ein, zum Beispiel:
+    // Hier musst du deine echten Firebase-Konfigurationsdaten einfügen:
     const firebaseConfig = {
       apiKey: "DEIN_API_KEY",
       authDomain: "DEINE_AUTH_DOMAIN",
       databaseURL: "DEINE_DATABASE_URL",
       projectId: "DEINE_PROJECT_ID",
-      storageBucket: "DEIN_STORAGE_BUCKET",
+      storageBucket: "DEINE_STORAGE_BUCKET",
       messagingSenderId: "DEINE_SENDER_ID",
       appId: "DEINE_APP_ID"
     };
 
-    // Firebase-Initialisierung
+    // Firebase initialisieren
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // Referenz zum Spielzustand
-    // Du kannst "myTicTacToeGame" durch einen eigenen Namen ersetzen.
+    // Referenz zum Spielzustand in der Datenbank
     const gameRef = db.ref("myTicTacToeGame");
 
-    // Lokale Variablen
-    let boardState = ["", "", "", "", "", "", "", "", ""]; // 9 Felder
-    let currentPlayer = "X"; // Standard: Spieler X beginnt
+    // Board-Variablen
+    let boardState = ["", "", "", "", "", "", "", "", ""];
     let gameOver = false;
 
-    // DOM-Elemente
-    const cells = document.querySelectorAll(".cell");
-    const statusElem = document.getElementById("status");
-    const resetBtn = document.getElementById("reset");
+    // Jeder Browser/Spieler kann ein eigenes Symbol wählen:
+    let mySymbol = null;
 
-    // Initialer Status laden
+    // DOM-Elemente
+    const cells      = document.querySelectorAll(".cell");
+    const statusElem = document.getElementById("status");
+    const resetBtn   = document.getElementById("reset");
+
+    // Symbolauswahl-Buttons
+    const chooseXBtn = document.getElementById("chooseX");
+    const chooseOBtn = document.getElementById("chooseO");
+
+    // Klick-Events für Symbolauswahl
+    chooseXBtn.addEventListener("click", () => {
+      mySymbol = "X";
+      statusElem.textContent = "Du spielst als X";
+    });
+
+    chooseOBtn.addEventListener("click", () => {
+      mySymbol = "O";
+      statusElem.textContent = "Du spielst als O";
+    });
+
+    // Aktuelle Daten vom Server laden, bei jeder Änderung
     gameRef.on("value", (snapshot) => {
       const data = snapshot.val();
       if (data) {
         boardState = data.boardState || boardState;
-        currentPlayer = data.currentPlayer || currentPlayer;
-        gameOver = data.gameOver || gameOver;
+        gameOver   = data.gameOver || gameOver;
         renderBoard();
         updateStatusText();
       }
     });
 
-    // Zellen-Klick-Events
+    // Klick auf ein Feld
     cells.forEach((cell) => {
       cell.addEventListener("click", () => {
         const index = cell.getAttribute("data-index");
 
-        // Wenn Feld noch leer, das Spiel nicht vorbei ist ...
-        if (!boardState[index] && !gameOver) {
-          boardState[index] = currentPlayer;
+        // Überprüfen, ob:
+        // 1) das Feld noch frei ist,
+        // 2) das Spiel nicht vorbei ist,
+        // 3) du dir überhaupt ein Symbol ausgesucht hast
+        if (!boardState[index] && !gameOver && mySymbol) {
+          boardState[index] = mySymbol;
+          renderBoard();     // Sofort lokal aktualisieren
           checkWin();
-          togglePlayer();
           updateDatabase();
         }
       });
     });
 
-    // Neues Spiel
+    // Klick auf "Neues Spiel"
     resetBtn.addEventListener("click", () => {
       boardState = ["", "", "", "", "", "", "", "", ""];
-      currentPlayer = "X";
-      gameOver = false;
+      gameOver   = false;
+      renderBoard();
       updateDatabase();
     });
+
+    // --------------------------------------------------
+    // Hilfsfunktionen
+    // --------------------------------------------------
 
     // Board in den Buttons darstellen
     function renderBoard() {
@@ -129,7 +166,7 @@
       }
     }
 
-    // Prüfen, ob jemand gewonnen hat
+    // Gewinner oder Unentschieden prüfen
     function checkWin() {
       const winPatterns = [
         [0, 1, 2],
@@ -142,7 +179,7 @@
         [2, 4, 6],
       ];
 
-      for (let pattern of winPatterns) {
+      for (const pattern of winPatterns) {
         const [a, b, c] = pattern;
         if (
           boardState[a] &&
@@ -155,31 +192,28 @@
         }
       }
 
-      // Prüfen auf Unentschieden
-      if (!boardState.includes("")) {
+      // Unentschieden?
+      if (!boardState.includes("") && !gameOver) {
         gameOver = true;
         statusElem.textContent = "Unentschieden!";
       }
     }
 
-    // Spielern wechseln
-    function togglePlayer() {
-      currentPlayer = currentPlayer === "X" ? "O" : "X";
-    }
-
-    // Status-Anzeige aktualisieren
+    // Status-Text (nur minimal, da Symbolauswahl individuell ist)
     function updateStatusText() {
-      if (!gameOver) {
-        statusElem.textContent = `Spieler ${currentPlayer} ist dran`;
+      if (gameOver) return;
+      if (!mySymbol) {
+        statusElem.textContent = "Wähle dein Symbol (X oder O), um zu spielen.";
+      } else {
+        statusElem.textContent = `Du spielst als ${mySymbol}`;
       }
     }
 
-    // Daten in der Datenbank aktualisieren
+    // Datenbank aktualisieren
     function updateDatabase() {
       gameRef.set({
         boardState: boardState,
-        currentPlayer: currentPlayer,
-        gameOver: gameOver,
+        gameOver: gameOver
       });
     }
   </script>
