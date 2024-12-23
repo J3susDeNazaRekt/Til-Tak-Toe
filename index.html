@@ -22,6 +22,8 @@
       height: 100px;
       font-size: 2rem;
       cursor: pointer;
+      text-align: center;
+      line-height: 100px;
     }
     #status {
       font-weight: bold;
@@ -33,7 +35,7 @@
       padding: 10px 20px;
       cursor: pointer;
     }
-    /* Einfaches Layout für die Wahl des Symbols */
+    /* Layout für die Symbolauswahl */
     #symbolSelection {
       margin: 10px 0;
     }
@@ -73,7 +75,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
   <script>
-    // Hier musst du deine echten Firebase-Konfigurationsdaten einfügen:
+    // WICHTIG: Hier deine echten Firebase-Daten eintragen:
     const firebaseConfig = {
       apiKey: "DEIN_API_KEY",
       authDomain: "DEINE_AUTH_DOMAIN",
@@ -91,23 +93,32 @@
     // Referenz zum Spielzustand in der Datenbank
     const gameRef = db.ref("myTicTacToeGame");
 
-    // Board-Variablen
+    // Variablen für den Spielzustand
     let boardState = ["", "", "", "", "", "", "", "", ""];
     let gameOver = false;
 
-    // Jeder Browser/Spieler kann ein eigenes Symbol wählen:
+    // Jeder Browser/Spieler kann ein eigenes Symbol wählen (X oder O)
     let mySymbol = null;
 
     // DOM-Elemente
     const cells      = document.querySelectorAll(".cell");
     const statusElem = document.getElementById("status");
     const resetBtn   = document.getElementById("reset");
-
-    // Symbolauswahl-Buttons
     const chooseXBtn = document.getElementById("chooseX");
     const chooseOBtn = document.getElementById("chooseO");
 
-    // Klick-Events für Symbolauswahl
+    // Beim Laden der Seite: Daten einmal abrufen und immer aktualisieren
+    gameRef.on("value", (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        boardState = data.boardState || boardState;
+        gameOver   = data.gameOver || false;
+        renderBoard();
+        updateStatusText();
+      }
+    });
+
+    // Symbolauswahl
     chooseXBtn.addEventListener("click", () => {
       mySymbol = "X";
       statusElem.textContent = "Du spielst als X";
@@ -118,55 +129,47 @@
       statusElem.textContent = "Du spielst als O";
     });
 
-    // Aktuelle Daten vom Server laden, bei jeder Änderung
-    gameRef.on("value", (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        boardState = data.boardState || boardState;
-        gameOver   = data.gameOver || gameOver;
-        renderBoard();
-        updateStatusText();
-      }
-    });
-
     // Klick auf ein Feld
     cells.forEach((cell) => {
       cell.addEventListener("click", () => {
+        // Index aus dem data-index-Attribut auslesen
         const index = cell.getAttribute("data-index");
 
-        // Überprüfen, ob:
-        // 1) das Feld noch frei ist,
-        // 2) das Spiel nicht vorbei ist,
-        // 3) du dir überhaupt ein Symbol ausgesucht hast
-        if (!boardState[index] && !gameOver && mySymbol) {
+        // Platzieren darf nur, wer:
+        // (1) Ein Symbol gewählt hat
+        // (2) Wenn das Feld noch leer ist
+        // (3) Wenn das Spiel nicht schon vorbei ist
+        if (mySymbol && !boardState[index] && !gameOver) {
           boardState[index] = mySymbol;
-          renderBoard();     // Sofort lokal aktualisieren
+
+          // Lokal sofort aktualisieren, damit du Feedback bekommst
+          renderBoard();
           checkWin();
           updateDatabase();
         }
       });
     });
 
-    // Klick auf "Neues Spiel"
+    // "Neues Spiel"-Button
     resetBtn.addEventListener("click", () => {
       boardState = ["", "", "", "", "", "", "", "", ""];
       gameOver   = false;
       renderBoard();
       updateDatabase();
+      // Symbol bleibt bestehen, man kann es aber jederzeit neu wählen
+      statusElem.textContent = mySymbol
+        ? `Du spielst als ${mySymbol}`
+        : "Wähle dein Symbol (X oder O)";
     });
 
-    // --------------------------------------------------
-    // Hilfsfunktionen
-    // --------------------------------------------------
-
-    // Board in den Buttons darstellen
+    // Board in Buttons übertragen
     function renderBoard() {
       for (let i = 0; i < cells.length; i++) {
         cells[i].textContent = boardState[i];
       }
     }
 
-    // Gewinner oder Unentschieden prüfen
+    // Prüfen, ob ein Spieler gewonnen hat
     function checkWin() {
       const winPatterns = [
         [0, 1, 2],
@@ -182,7 +185,7 @@
       for (const pattern of winPatterns) {
         const [a, b, c] = pattern;
         if (
-          boardState[a] &&
+          boardState[a] !== "" &&
           boardState[a] === boardState[b] &&
           boardState[a] === boardState[c]
         ) {
@@ -199,9 +202,9 @@
       }
     }
 
-    // Status-Text (nur minimal, da Symbolauswahl individuell ist)
+    // Status-Text aktualisieren
     function updateStatusText() {
-      if (gameOver) return;
+      if (gameOver) return; 
       if (!mySymbol) {
         statusElem.textContent = "Wähle dein Symbol (X oder O), um zu spielen.";
       } else {
@@ -209,11 +212,11 @@
       }
     }
 
-    // Datenbank aktualisieren
+    // Aktualisierung der Datenbank
     function updateDatabase() {
       gameRef.set({
-        boardState: boardState,
-        gameOver: gameOver
+        boardState,
+        gameOver
       });
     }
   </script>
